@@ -66,13 +66,13 @@
       "subtasks": {
         "T-20251113-soc-api-validation-ST-01": {
           "seed_id": null,
-          "title": "梳理 SOC API 资源与参数空间",
-          "type": "research",
-          "summary": "系统盘点 Rutgers SOC 提供的 courses、sections、openSections 等资源，枚举 term、campus、subject、level、keyword 等参数及真实取值范围，对比官方说明与实际响应，形成完整的参数/资源映射表。",
+          "title": "实现 SOC API 探测 CLI 并生成原始快照",
+          "type": "coding",
+          "summary": "编写 scripts/soc_probe.ts 命令行工具，按照配置遍历 term/campus/subject 组合并将原始响应保存到 data/raw 下，形成后续建库与通知任务可直接消费的真实输入。",
           "acceptance_draft": [
-            "列出所有可访问的 SOC API 资源、必填与可选参数、默认值及示例 URL，覆盖课程与 openSections 两大主入口。",
-            "针对至少两个 term + campus 组合获取示例响应，标注字段层级、是否稳定存在及与官方描述不一致的差异。",
-            "输出 docs/soc_api_map.md，含参数表格、字段速查及“官方 vs 实测”差异备注，可直接供脚本与轮询任务引用。"
+            "提供 configs/soc_probe.sample.json 以声明 term/campus/subject 组合，运行 `pnpm ts-node scripts/soc_probe.ts --config configs/soc_probe.sample.json` 会在 `data/raw/<term>-<campus>.json` 下生成最新快照并打印成功统计。",
+            "CLI 将每个请求的状态码与耗时写入 `logs/soc_probe.log`，任一调用失败时进程退出非零状态，便于 CI/cron 直接感知异常。",
+            "补充最小回归测试（如 tests/soc_probe.spec.ts）和 HTTP mock fixture，验证参数解析与文件持久化逻辑可在 CI 中稳定运行。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -117,13 +117,13 @@
         },
         "T-20251113-soc-api-validation-ST-02": {
           "seed_id": null,
-          "title": "验证典型调用路径与边界行为",
-          "type": "research",
-          "summary": "基于手动调用计划，验证不同 term/campus/subject 组合在正常与错误场景下的响应时间、分页规律、限流提示和错误码，明确高频抓取与轮询可接受的边界。",
+          "title": "构建限流与稳健性压测脚本",
+          "type": "coding",
+          "summary": "在 scripts/soc_rate_bench.ts 中复用探测逻辑，按指定并发度与速率对 SOC API 做压测，生成包含限流阈值与错误码的机器可读报告。",
           "acceptance_draft": [
-            "设计一份包含常见组合（term+campus、subject、level、keyword）与异常组合（无效 term、subject）的调用矩阵，逐项执行并记录响应时间、payload 大小。",
-            "通过短时间内逐步提高调用频率的实验，捕捉速率限制或错误码，并描述出错前的阈值与恢复策略。",
-            "文档化成功/失败响应样例、典型 headers 与节流提示，输出 docs/soc_api_test_report.md 供抓取脚本复用。"
+            "脚本支持 `--concurrency`、`--duration`、`--terms` 等参数，执行后会在 `artifacts/soc_rate_report.json` 写入吞吐量、失败率、限流窗口等统计。",
+            "压测过程中捕捉 HTTP 错误码与速率限制 header，将第一次和最后一次被限流的时间戳打印到控制台并写入报告。",
+            "提供 `--dry-run` 模式与 tests/soc_rate_bench.spec.ts，用 mock HTTP server 验证参数校验与节流逻辑，保证 CI 可运行。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -169,13 +169,13 @@
         },
         "T-20251113-soc-api-validation-ST-03": {
           "seed_id": null,
-          "title": "整理可复用的 API 调用手册",
-          "type": "research",
-          "summary": "将资源映射与边界实验固化为调用手册，明确推荐 URL 模板、分页/批量策略、速率上限、日志字段与常见坑，作为后续抓取与轮询任务的统一约定。",
+          "title": "导出可机读的字段映射与契约测试",
+          "type": "coding",
+          "summary": "基于 data/raw 快照生成字段映射 JSON，并在测试中验证 FR-01/FR-02 所需字段存在与类型稳定，为抓取脚本提供持续可运行的契约保障。",
           "acceptance_draft": [
-            "输出 docs/soc_api_handbook.md，描述各资源的推荐基础 URL、查询参数模板、分页/分批策略及示例 cURL。",
-            "提供“安全节奏”建议：给出全量抓取、增量轮询各自的推荐频率、并发数和退避策略，并关联到限流实验数据。",
-            "列出常见错误与规避原则（例如 subject 缺省、campus 拼写、term 变更），并说明调用者必须记录的日志字段与监控指标。"
+            "实现 scripts/soc_contract_report.ts，将最新 `data/raw/*.json` 汇总为 `docs/soc_api_contract.json`，记录字段层级、数据类型、是否稳定存在。",
+            "新增 tests/soc_contract.test.ts，读取 contract JSON 并对课程标题、课程号、容量、meeting 信息等关键字段做断言，缺失时测试失败。",
+            "把 contract 生成与校验封装到 `pnpm run validate:soc-api` 命令，供抓取、通知与 CI 复用。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -273,13 +273,13 @@
       "subtasks": {
         "T-20251113-act-001-soc-json-scraper-ST-01": {
           "seed_id": null,
-          "title": "定义“数据库已建好”的目标状态",
+          "title": "实现批量抓取 CLI 并持久化原始 JSON",
           "type": "coding",
-          "summary": "从业务角度明确某个 term + campus 在本地 SQLite 中达到“已建好”所需的覆盖范围、字段完整性、校验动作与对外可见能力。",
+          "summary": "封装 scripts/fetch_soc.ts，将 term/campus/subject 组合串行或并行调用 SOC API，输出 data/raw/* 目录与 manifest，供建库与测试直接使用。",
           "acceptance_draft": [
-            "列出最小完备条件：包含哪些表、字段、索引、订阅相关视图以及对应的记录数/覆盖率指标。",
-            "定义初始化完成时必须运行的校验（样本抽查、字段非空、索引存在、订阅表一致性）与自动化脚本输出。",
-            "形成 docs/db/ready_checklist.md，为每个 term/campus 记录“建库完成”所需的元数据（版本号、抓取时间、脚本 hash）。"
+            "运行 `pnpm ts-node scripts/fetch_soc.ts --terms 2024FA,2024SP --campuses NB --subjects CS,EE` 会在 `data/raw/<term>/<campus>/<subject>.json` 下生成文件，并写入 `data/raw/manifest.json` 记录哈希与时间戳。",
+            "CLI 支持断点续跑（基于 manifest 跳过未过期的快照）并提供 `--force` 参数强制刷新，失败时会清理半成品文件。",
+            "新增 tests/fetch_soc.spec.ts，使用 HTTP mock 验证批次划分、重试与 manifest 读写逻辑。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -317,13 +317,13 @@
         },
         "T-20251113-act-001-soc-json-scraper-ST-02": {
           "seed_id": null,
-          "title": "设计从 API 调用到 DB 初始化的流程链",
+          "title": "编写 JSON→SQLite 转换器与初始化脚本",
           "type": "coding",
-          "summary": "串联 term 列表、调用策略、原始 JSON 快照、结构化转换与 SQLite 初始化/更新步骤，明确输入输出与重试节点。",
+          "summary": "实现 scripts/seed_sqlite.ts，读取 data/raw 快照并通过事务写入 SQLite，创建课程、section、meeting、订阅等表及必要索引。",
           "acceptance_draft": [
-            "绘制流程图或时序图，描述 term 列表扩展、API 调用批次、原始快照落盘、转换脚本、数据库事务写入等步骤。",
-            "为流程中的关键节点指定产物与接口（例如 data/raw/*.json、tmp tables、migrate 脚本），并列出可并行与必须串行的阶段。",
-            "输出 scripts/fetch_soc_data.md 或等效文档，供后续实现脚本直接对照。"
+            "执行 `pnpm ts-node scripts/seed_sqlite.ts --raw data/raw/2024FA --db data/app.db` 会生成/更新数据库，输出每张表的写入条数与耗时。",
+            "脚本在字段缺失或约束失败时能回滚事务并返回错误码，避免落地半成品数据库。",
+            "添加 tests/seed_sqlite.integration.ts，使用 sample fixture 验证所有表/索引存在且数据与输入快照一致。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -362,13 +362,13 @@
         },
         "T-20251113-act-001-soc-json-scraper-ST-03": {
           "seed_id": null,
-          "title": "定义建库检查与重建策略",
+          "title": "封装一键建库流程并加入 CI 校验",
           "type": "coding",
-          "summary": "规定建库流程完成后的验收项、错误时的回滚/重建行为，以及如何在 CI 或运维脚本中自动执行这些检查。",
+          "summary": "使用 Makefile 或 package script 串联抓取与建库，提供单命令刷新数据库的流程，并在 CI 中通过缩减数据运行一次烟囱测试。",
           "acceptance_draft": [
-            "列出建库完成后必须通过的检查（记录数、哈希、字段非空、订阅视图可查询）及对应脚本命令。",
-            "定义重建策略：何时全量重建、何时增量刷新、如何备份老版本、失败后如何回滚或保留旧实例。",
-            "在 docs/data_pipeline/rebuild_policy.md 中记录这些策略，并提供示例命令/伪代码。"
+            "新增 `make refresh-db TERM=2024FA CAMPUS=NB`（或 `pnpm run db:refresh`），串联 fetch_soc 与 seed_sqlite，完成后自动运行 `sqlite3 data/app.db \"SELECT count(*) FROM courses;\"` 作为校验。",
+            "在 `.github/workflows/db-refresh.yml` 或 scripts/ci_db_refresh.sh 中加入缩减数据烟囱测试，自动上传 `data/app.db` 作为 artifact。",
+            "在 README/docs/development.md 记录上述命令、依赖与常见问题，让新开发者 clone 后可直接运行同一流程。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -462,13 +462,13 @@
       "subtasks": {
         "T-20251113-act-002-frontend-filter-mvp-ST-01": {
           "seed_id": null,
-          "title": "建立筛选字段目录并分层",
+          "title": "搭建课程检索页面骨架与数据源",
           "type": "coding",
-          "summary": "整理所有可筛选字段的展示名称、字段来源、默认交互方式与分层（基础/高级/调试），作为前端筛选的唯一信息源。",
+          "summary": "创建 web/src/pages/CourseSearchPage.tsx，并通过 hook 连接本地 /api/courses，确保 `pnpm dev` 下可访问和加载课程列表。",
           "acceptance_draft": [
-            "列出至少 25 个字段（如 term、campus、credits、core_code、weekday、mode），为每个字段定义展示名、描述、控件类型。",
-            "为字段打标签：基础筛选、高级筛选、调试/开发，支持后续 UI 按层级展示。",
-            "发布 docs/ux/filter_field_catalog.md，并在前端配置中以 JSON/TS 常量形式引用同一份源数据。"
+            "在路由表中注册 `/courses` 页面并完成基本布局，含列表容器与筛选面板占位。",
+            "实现 `useCoursesQuery` 等数据获取 hook，能够读取 term/campus 参数并呈现加载与错误状态。",
+            "编写 Playwright 或 Vitest 烟囱测试，用 mock server 验证页面渲染会触发一次 /api/courses 调用并展示响应数据。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -509,13 +509,13 @@
         },
         "T-20251113-act-002-frontend-filter-mvp-ST-02": {
           "seed_id": null,
-          "title": "定义用户问题到 API 参数的映射",
+          "title": "实现多维筛选面板与状态容器",
           "type": "coding",
-          "summary": "为典型用户表达（如“想要周二下午 3 学分课”）设计 UI 控件组合与对应的 API 参数映射规则，保证双向一致。",
+          "summary": "开发 subject/level/credits/keyword 等筛选组件，与 Zustand/Recoil 等状态容器绑定，实现筛选条件的保存、重置与 URL 同步。",
           "acceptance_draft": [
-            "整理 8~10 个高频问题示例，描述用户输入、UI 控件、映射到的 API 参数与示例请求。",
-            "定义控件组合与参数组合的校验逻辑（互斥/依赖），并在 docs/ux/filter_mapping.md 中记录。",
-            "为映射生成单元测试或伪代码，确保在前端实现时可直接引用。"
+            "在 `web/src/components/filters` 下实现独立组件，并通过统一的 `FilterGroup` 结构渲染。",
+            "创建 `useCourseFilterStore` 管理筛选条件，支持持久化到 URL query 与快速重置。",
+            "为每个筛选组件补充单元测试，验证用户交互会更新 store 并触发订阅回调。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -556,13 +556,13 @@
         },
         "T-20251113-act-002-frontend-filter-mvp-ST-03": {
           "seed_id": null,
-          "title": "规定筛选交互反馈与约束",
+          "title": "连通列表渲染、分页与结果断言",
           "type": "coding",
-          "summary": "提前定义筛选条件过宽/过窄、组合复杂导致性能风险时的用户提示、节奏建议与必要的强制约束。",
+          "summary": "将筛选状态与课程列表联动，支持分页/虚拟列表、空状态与表头排序，并用 e2e 测试验证筛选结果真实生效。",
           "acceptance_draft": [
-            "列举至少 5 种需要提示的场景（结果过多、过少、组合冲突、条件失效、API 故障）及对应文案。",
-            "给出节奏建议：当结果超出阈值时提示分页或要求缩窄条件，当调用失败时提供重试/收紧选项。",
-            "将这些行为固化在 docs/ux/filter_feedback.md 中，并附上状态流或决策表。"
+            "CourseResultsTable 渲染 FR-01/FR-02 所需列（课程号、标题、教授、容量等），支持千条数据下的虚拟滚动或分页。",
+            "筛选条件变化会触发 useCoursesQuery 重新请求并刷新列表，同时在空结果与错误时显示对应的 UI。",
+            "新增 `pnpm test:e2e --filter course-search`，用 Playwright 模拟调整 subject/keyword 等筛选并断言所见课程发生变化。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -674,13 +674,13 @@
       "subtasks": {
         "T-20251113-act-003-mail-notify-function-ST-01": {
           "seed_id": null,
-          "title": "设计事件 + 订阅到通知单元的映射",
+          "title": "实现空位事件队列与邮件任务入库",
           "type": "coding",
-          "summary": "明确如何将一条空位事件与订阅记录组合成最终邮件模板所需字段、文案、退订信息与跟踪参数。",
+          "summary": "在 notifier 目录新增 emailQueueWorker，监听 openSections 事件并写入 SQLite/email_jobs 队列表，为后续发送模块提供可运行的数据来源。",
           "acceptance_draft": [
-            "列出通知单元必须包含的字段（课程/section、时间地点、订阅者称呼、退订链接、事件时间）。",
-            "设计模板变量与渲染逻辑，指明不同通知类型（课程级 vs section 级）的差异。",
-            "在 docs/notify/mail_mapping.md 中记录映射与示例 payload，便于 mail sender 模块使用。"
+            "创建 `notifier/src/emailQueueWorker.ts`，暴露 `pnpm ts-node notifier/src/emailQueueWorker.ts --run-once` 命令，将轮询服务推送的 openSections 事件转换为 email_jobs 记录。",
+            "email_jobs 表包含订阅 ID、section 状态、模板变量、重试计数等字段，并通过 migration 文件创建。",
+            "使用 sqlite-memory + mock 事件写入的集成测试，验证 worker 能够去重并正确标记 pending 状态。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -738,13 +738,13 @@
         },
         "T-20251113-act-003-mail-notify-function-ST-02": {
           "seed_id": null,
-          "title": "设计收件人组织与分批策略",
+          "title": "实现邮件模板渲染与发送适配器",
           "type": "coding",
-          "summary": "在多订阅命中同一事件的情况下，确定是逐个订阅发送还是批量合并、如何避免邮件风暴并兼顾速率限制。",
+          "summary": "抽象 MailSender 接口，提供本地 SMTP 与 SendGrid mock 实现，并使用多语言模板生成 HTML/Plain 文本。",
           "acceptance_draft": [
-            "评估不同策略（逐条发送、按用户合并、按课程合并）的优缺点与适用场景。",
-            "定义分批/限速方案：每批最大收件人、批次间隔、遇到限流时的退避行为。",
-            "在 docs/notify/mail_batching.md 中记录策略，并提供伪代码供 worker 实现。"
+            "在 `notifier/src/mailers` 下实现模板渲染器，读取 `templates/email/{locale}`，产出 HTML 与文本版本。",
+            "封装 `MailSender` 接口并提供 SMTP 与 SendGrid 两种实现，通过环境变量切换。",
+            "使用 mailhog/mock-smtp 的集成测试验证模板渲染与发送路径，`pnpm test mailer` 需通过。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -802,13 +802,13 @@
         },
         "T-20251113-act-003-mail-notify-function-ST-03": {
           "seed_id": null,
-          "title": "设定通知延迟目标与重复策略",
+          "title": "落地发送调度与重试流程",
           "type": "coding",
-          "summary": "从用户体验角度设定平均/最大延迟、重复通知冷却时间，以及日志/指标要求，保证通知及时且不过度打扰。",
+          "summary": "实现 emailDispatcher 常驻进程，按配置频率扫描待发送任务、调用 MailSender 并记录重试/失败信息。",
           "acceptance_draft": [
-            "给出平均/最大延迟目标（例如均值 <30s、P99 <60s），并定义测量方式（事件时间 vs 发送时间）。",
-            "设定重复通知冷却周期（同一用户+课程多长时间内只发一次），以及例外情况。",
-            "将目标写入 docs/notify/mail_slo.md，包含监控指标、告警阈值与回归测试建议。"
+            "提供 `pnpm ts-node notifier/src/emailDispatcher.ts --interval 30` 命令，按固定频率拉取 pending 任务并调用 MailSender。",
+            "dispatcher 会追踪重试次数与最后一次错误原因，超过阈值自动标记 failed 并写日志。",
+            "编写 sqlite-memory + mock sender 的集成测试，验证 pending→sent/failed 状态流转与重试策略。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -933,13 +933,13 @@
       "subtasks": {
         "T-20251113-act-004-discord-notify-channel-ST-01": {
           "seed_id": null,
-          "title": "明确 Discord 通知在体系中的角色",
+          "title": "实现 Discord Bot 客户端与鉴权配置",
           "type": "coding",
-          "summary": "讨论 Discord 在提醒体系中是补充渠道、替代渠道还是社区广播，并界定目标用户与默认使用场景。",
+          "summary": "构建 notifier/src/discordBot.ts，负责与 Discord Webhook/Bot API 建立连接，并提供注册与健康检查 CLI。",
           "acceptance_draft": [
-            "列出至少三种定位选项（补充、替代、广播）及优缺点、适用场景。",
-            "确定 MVP 默认定位与适配的用户画像，说明何时建议启用 Discord。",
-            "将结论写入 docs/notify/discord_strategy.md，供产品与部署方参考。"
+            "实现 `pnpm ts-node notifier/src/discordBot.ts --health`，在提供 BOT_TOKEN 的情况下完成鉴权并输出可用频道。",
+            "支持 `--register-channel <id>` 将目标 channel 或 webhook URL 写入配置表，便于多环境复用。",
+            "提供基于 nock 的单元测试，验证鉴权与注册请求 payload。"
           ],
           "lane": "next",
           "priority_suggested": "P2",
@@ -978,13 +978,13 @@
         },
         "T-20251113-act-004-discord-notify-channel-ST-02": {
           "seed_id": null,
-          "title": "设计 Discord 身份与订阅模型映射",
+          "title": "接入通知事件总线并格式化消息",
           "type": "coding",
-          "summary": "确定如何在统一订阅模型中表示 Discord 用户或频道，保证邮件与 Discord 共享同一套逻辑。",
+          "summary": "实现 discordNotifier，订阅 polling 服务生成的课程事件，将课号、title、seat delta 等信息格式化为 Markdown 消息并发往目标频道或私信。",
           "acceptance_draft": [
-            "定义 Discord user/channel 的唯一标识字段、验证方式与在数据库中的存储格式。",
-            "描述如何在订阅创建时选择 Discord 通道（用户/频道/角色）并记录权限需求。",
-            "将映射方案写入 docs/notify/discord_mapping.md，并与 subscription schema 对齐。"
+            "在 `notifier/src/discordNotifier.ts` 中监听事件队列，组装消息并支持 DM 与频道两种发送模式。",
+            "消息模板支持中英文，允许通过配置覆盖标题、CTA 链接等字段。",
+            "新增 `pnpm test discord-notifier`，使用 webhook mock 断言不同事件类型的格式化结果。"
           ],
           "lane": "next",
           "priority_suggested": "P2",
@@ -1024,13 +1024,13 @@
         },
         "T-20251113-act-004-discord-notify-channel-ST-03": {
           "seed_id": null,
-          "title": "评估风险/收益并定义启用策略",
+          "title": "端到端运行脚本与回归测试",
           "type": "coding",
-          "summary": "衡量限流、噪音、维护成本等因素，决定默认是否启用、如何推荐规模与环境，并描述监控/降级策略。",
+          "summary": "提供 notify:discord 脚本与 docker-compose stub，能够在本地一次性跑通事件→Discord 链路并在 CI 中执行烟囱测试。",
           "acceptance_draft": [
-            "列出潜在风险（限流、被举报、机器人维护）与收益，并给出缓解措施。",
-            "定义启用等级：默认关闭、测试环境开启、满足某些条件后再开放，并说明审批/配置流程。",
-            "在 docs/notify/discord_enablement.md 中记录启用策略、监控指标与降级方案。"
+            "在 `docker-compose.yml` 中增加 Discord webhook stub 服务或使用本地 express mock，供 CI 断言。",
+            "新增 `pnpm run notify:discord --dry-run` 命令，读取样例事件并发送到 mock 端点。",
+            "CI 加入任务运行 notify:discord，并断言 mock 端点收到了预期 payload。"
           ],
           "lane": "next",
           "priority_suggested": "P2",
@@ -1118,13 +1118,13 @@
       "subtasks": {
         "T-20251113-act-005-frontend-i18n-setup-ST-01": {
           "seed_id": null,
-          "title": "盘点多语言触点与保留原文区域",
+          "title": "引入 i18n 框架与全局 Provider",
           "type": "coding",
-          "summary": "列举 UI、错误提示、通知邮件、文档等需要多语言支持的触点，同时确认课程数据、核心代码等是否保持原文。",
+          "summary": "安装 react-i18next（或等效库），在应用入口创建 I18n Provider，并提供语言探测与懒加载能力。",
           "acceptance_draft": [
-            "梳理所有 UI 页面、弹窗、表单、错误提示、邮件模板，标注哪些需要中/英版本，哪些保持英文原始值。",
-            "定义可本地化与不可本地化字段清单，说明课程名称、描述等数据如何标注“保留原文但可加解释”。",
-            "输出 docs/i18n/touchpoints.md，并在 issue/任务中引用作为范围基线。"
+            "新增 `web/src/i18n/index.ts` 初始化多语言实例，在 `App.tsx` 中挂载 I18nextProvider。",
+            "提供 `.env` 或配置项决定默认语言与可选语言集合。",
+            "编写单元测试验证 Provider 初始化及默认语言 fallback，`pnpm test i18n-provider` 需通过。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -1162,13 +1162,13 @@
         },
         "T-20251113-act-005-frontend-i18n-setup-ST-02": {
           "seed_id": null,
-          "title": "设计语言模式与切换策略",
+          "title": "落地文案资源文件与语言切换组件",
           "type": "coding",
-          "summary": "确定支持语言列表、默认语言选择逻辑（浏览器/用户偏好）、切换入口与持久化方式。",
+          "summary": "将现有静态文案迁移到 `web/src/locales/{lang}/common.json`，实现语言切换组件并将偏好持久化。",
           "acceptance_draft": [
-            "给出语言模式矩阵：默认语言、可选语言、未来扩展语言及生效优先级（URL、localStorage、浏览器 header）。",
-            "设计 UI 切换入口与状态同步方案（全局状态或 context），并记录在 docs/i18n/language_modes.md。",
-            "定义切换后的持久化策略（cookie/localStorage）及回退机制。"
+            "完成至少中英文 common.json，覆盖页面标题、筛选标签、按钮、错误提示等现有文案。",
+            "实现 `LanguageSwitcher` 组件并挂载在主导航，能写入 localStorage 并立即触发语言切换。",
+            "通过 Storybook 或 RTL 测试验证主要页面在两种语言下都能渲染对应文案。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -1206,13 +1206,13 @@
         },
         "T-20251113-act-005-frontend-i18n-setup-ST-03": {
           "seed_id": null,
-          "title": "规划文案组织方式与缺失翻译策略",
+          "title": "建立未翻译检测与 CI 保障",
           "type": "coding",
-          "summary": "决定文案 key 命名、分组方式以及缺失翻译时的回退/占位策略，为后续维护设定规则。",
+          "summary": "构建 lint:i18n 脚本检测遗漏 key，配套单测与 CI 任务，防止新文案未同步多语言。",
           "acceptance_draft": [
-            "定义命名规范：模块前缀、语义层级、变量插值规则，并提供示例。",
-            "确定文案文件夹结构（locales/en/*.json、locales/zh/*.json 等）及分组准则。",
-            "记录缺失翻译时的处理方式（回退到另一语言、显示占位、CI 告警），写入 docs/i18n/content_strategy.md。"
+            "添加 `pnpm run lint:i18n` 命令，使用 i18next-parser 或自定义脚本扫描源码并与 locale 文件 diff。",
+            "为 lint 逻辑编写单测，覆盖“缺 key”“多余 key”“未使用 key”场景。",
+            "在 CI workflow 中新增一步执行 lint:i18n，缺 key 时 PR 直接失败。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -1306,13 +1306,13 @@
       "subtasks": {
         "T-20251113-act-006-deploy-docs-cicd-ST-01": {
           "seed_id": null,
-          "title": "定义普通用户的成功部署故事",
-          "type": "docs",
-          "summary": "用叙事方式描述从 git clone 到收一个测试通知的完整旅程，作为部署文档的验收基线。",
+          "title": "提供一键环境引导脚本",
+          "type": "infra",
+          "summary": "编写 scripts/bootstrap_env.sh，自动安装 Node/pnpm/SQLite、复制 .env 样例并下载必要的数据，确保开发者在新机器上可一键初始化。",
           "acceptance_draft": [
-            "撰写一段“Day 1 用户故事”，覆盖 clone 仓库、安装依赖、配置环境、初始化数据库、启动 API/前端/通知，并发送测试邮件。",
-            "明确故事中的每个关键节点需要看到的反馈（终端输出、UI 页面、测试邮件）。",
-            "发布 docs/deploy/success_story.md，为后续脚本与文档写作提供统一口径。"
+            "bootstrap 脚本支持 macOS/Linux，自动检测依赖并在缺失时执行包管理命令或给出提示。",
+            "脚本会创建 `.env.local` 并填充默认端口/API KEY 占位，同时拉取最新 data/raw 缩减包。",
+            "提供 `./scripts/bootstrap_env.sh --verify` 自检模式，运行结果写入 logs/bootstrap.log 并在依赖缺失时返回非零状态。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -1349,13 +1349,13 @@
         },
         "T-20251113-act-006-deploy-docs-cicd-ST-02": {
           "seed_id": null,
-          "title": "拆解部署流程并限定支持环境",
-          "type": "docs",
-          "summary": "列出官方支持的系统/依赖，拆分部署阶段（安装依赖→初始化数据→配置环境→启动服务→功能验证），并给出每阶段输入输出。",
+          "title": "打包本地运行栈并统一启动入口",
+          "type": "infra",
+          "summary": "使用 docker compose 或 pm2 ecosystem 将 SQLite、API、前端与通知 worker 组合成一键启动的 dev stack。",
           "acceptance_draft": [
-            "定义官方支持的操作系统/运行环境矩阵，列出必需/可选依赖版本。",
-            "拆分部署阶段并为每阶段列出命令、脚本、预期输出，整理到 docs/deploy/flow.md。",
-            "标注每阶段与脚本/配置文件的对应关系（例如 scripts/setup_local_env.sh、.env.example）。"
+            "新增 `docker-compose.yml`（或等效编排）定义 api、web、poller、notifier、mailhog 等服务，并使用共享卷挂载 data/app.db。",
+            "提供 `pnpm run dev:stack`/`make dev-up` 封装 compose up -d，并在完成后打印访问链接。",
+            "附带 `scripts/check_stack.sh` 健康检查脚本，轮询关键端点并在异常时退出非零状态。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -1394,13 +1394,13 @@
         },
         "T-20251113-act-006-deploy-docs-cicd-ST-03": {
           "seed_id": null,
-          "title": "为部署阶段设计自检与排障入口",
-          "type": "docs",
-          "summary": "为每个部署阶段提供“我应该看到什么”“常见错误与检查点”的清单，降低支持成本。",
+          "title": "CI 部署演练与烟囱测试",
+          "type": "infra",
+          "summary": "在 CI 中执行 build→compose up→smoke test 的流水线，确保任意提交都能在干净环境拉起整套系统。",
           "acceptance_draft": [
-            "为每阶段列出至少 2 个自检命令或 UI 指标，明确预期输出。",
-            "收集常见错误（依赖安装失败、环境变量缺失、端口占用、邮件配置错误）及对应排障步骤。",
-            "将内容整理到 docs/deploy/troubleshooting.md，并在 README 链接。"
+            "新增 `.github/workflows/deploy-smoke.yml`，构建前端与 API 镜像后运行 docker compose。",
+            "workflow 内执行 `./scripts/check_stack.sh` 并对 API /courses、前端首页发送 HTTP 请求断言。",
+            "将 compose logs 与生成的 .env.example/README 摘要作为 CI artifact 存档。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -1498,13 +1498,13 @@
       "subtasks": {
         "T-20251113-act-007-local-db-schema-ST-01": {
           "seed_id": null,
-          "title": "获取 Spring 2026 courses/openSections 原始样本",
+          "title": "编写 SQLite schema/migrations",
           "type": "coding",
-          "summary": "在最小可行范围内拉取 Spring 2026 term 的 courses.json 与 openSections 全量 JSON，并记录抓取参数、时间戳与校区覆盖，作为后续 schema 分析的固定样本。",
+          "summary": "在 schema/migrations 目录创建 SQL，定义 courses、sections、meetings、subscriptions 等表及索引，附带注释说明字段含义。",
           "acceptance_draft": [
-            "使用自动化脚本按 term=2026SP（或官方对应 ID）分别抓取至少 New Brunswick、Newark、Camden 三个校区的 courses 与 openSections 数据。",
-            "保存原始 JSON 与元数据（抓取时间、调用参数、响应大小）到 data/raw/spring-2026-*，并校验文件完整可解析。",
-            "在 docs/db/sample_notes.md 中描述样本覆盖范围、缺失字段或疑似异常，为后续分析提供上下文。"
+            "提供 `schema/migrations/001_init.sql` 等文件，包含建表、索引、触发器以及基础视图。",
+            "迁移可通过 `pnpm run migrate -- --db data/app.db` 执行，首次运行会创建 schema_version 记录。",
+            "在 `tests/db/migration_smoke.test.ts` 中使用 sqlite-memory 跑迁移并断言关键表与索引存在。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1553,13 +1553,13 @@
         },
         "T-20251113-act-007-local-db-schema-ST-02": {
           "seed_id": null,
-          "title": "分析样本字段结构与层级关系",
+          "title": "实现迁移运行器与版本管理",
           "type": "coding",
-          "summary": "基于 Spring 2026 样本，梳理课程、section、meetingTimes、openSections 各层级字段、稀疏度与关联方式，提炼“数据怎么存/怎么查”的事实依据。",
+          "summary": "编写 scripts/migrate_db.ts，支持向上/向下迁移、版本锁定与 checksum 校验，保证多环境迁移一致。",
           "acceptance_draft": [
-            "为 courses 与 openSections 生成字段字典，记录字段类型、是否必填、示例值，以及与 FR-01/FR-02 的映射关系。",
-            "绘制课程→Section→meetingTimes→openSections 的层级关系图或表格，描述主键/外键、数组、嵌套结构以及潜在重复字段。",
-            "在 docs/db/sample_notes.md 中补充字段稀疏度统计（至少列出 10 个关键字段的存在比例）与特殊取值说明。"
+            "migrate_db 支持 `up`、`down`、`status` 子命令，并在 schema_version 中记录执行历史。",
+            "运行器具备 checksum 校验，若 SQL 变更会阻止继续执行并提示修复。",
+            "为运行器添加单元与 CLI 集成测试，确保重复执行不会破坏现有数据。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1597,13 +1597,13 @@
         },
         "T-20251113-act-007-local-db-schema-ST-03": {
           "seed_id": null,
-          "title": "设计 0 损失的 DB 概念模型",
+          "title": "建立查询与索引性能回归测试",
           "type": "coding",
-          "summary": "在不丢弃任何原始字段的前提下，定义原始 JSON 长期保留策略、结构化视图的拆分方案以及全量/增量更新故事，形成本地 DB 的概念模型。",
+          "summary": "针对关键查询编写基准脚本和断言，确保 schema 变更不会导致严重性能退化。",
           "acceptance_draft": [
-            "输出 ER 图或概念模型说明，描述 raw_snapshot、courses、sections、meetings、open_sections 等表/视图的拆分与主键。",
-            "定义原始 JSON 的长期保留方式（文件 vs raw 表），以及供查询/通知使用的结构化视图字段映射。",
-            "描述全量/增量更新流程：何时落盘快照、如何切换主表、如何记录版本元数据，确保可以增量重建且不丢字段。"
+            "新增 `scripts/benchmark_queries.ts`，在 sample 数据下执行课程/section 典型查询并输出耗时。",
+            "使用 Jest/Vitest 在 tests/db/perf.test.ts 中设置阈值断言，超过阈值时提示添加索引。",
+            "`pnpm run db:test` 将串联迁移、基准与 perf 测试，CI 中执行失败会阻塞合并。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1694,13 +1694,13 @@
       "subtasks": {
         "T-20251113-act-008-local-query-api-ST-01": {
           "seed_id": null,
-          "title": "抽象课程查询问题语言",
+          "title": "搭建查询 API 服务骨架与健康检查",
           "type": "coding",
-          "summary": "根据前端展示、空位提醒、统计需求列出典型问题，整理可组合的过滤维度、排序方式与分页语义，形成统一的查询模型。",
+          "summary": "使用 Express/Fastify 等框架创建 api/src/server.ts，完成基础中间件、配置加载与 /healthz 接口。",
           "acceptance_draft": [
-            "收集至少 10 个真实或预期场景（如“找周二晚 3 学分课程”），拆解成字段需求与排序偏好。",
-            "整理出一份字段能力矩阵：哪些字段支持等值/范围/模糊查询，哪些需要多选或排除逻辑。",
-            "输出 docs/api/query_model.md，明确查询模型的名词、参数命名及跨场景复用方式。"
+            "server 支持从 .env 读取端口、数据库文件路径，并在启动时验证 SQLite 连接。",
+            "实现 `GET /healthz` 返回数据库状态、构建版本与最近同步时间。",
+            "新增 `pnpm test api-health`，通过 supertest 等工具验证服务能启动并返回 200。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1736,13 +1736,13 @@
         },
         "T-20251113-act-008-local-query-api-ST-02": {
           "seed_id": null,
-          "title": "定义 API 资源与入出参语义",
+          "title": "实现课程/Section 查询与筛选接口",
           "type": "coding",
-          "summary": "决定暴露哪些 API 资源（按课程、按 section、聚合视图），每个资源支持的参数组合、分页/排序协议以及返回元数据。",
+          "summary": "实现 /api/courses、/api/sections、/api/filters 等端点，支持 term/campus/subject/level/keyword 等多条件筛选与分页。",
           "acceptance_draft": [
-            "列出 /api/courses、/api/sections 等端点的请求参数、默认排序、分页字段（page, pageSize, total）。",
-            "为每个端点提供响应示例，标注必要字段、可选字段及元数据，例如 available_filters、aggregations。",
-            "在 docs/api/contracts.md 中描述参数校验、互斥/依赖关系，并与查询模型逐一对齐。"
+            "端点支持 limit/offset、排序、字段选择，并对非法参数返回 400。",
+            "查询逻辑使用预编译 SQL 或查询构建器，保证可复用索引。",
+            "添加 tests/api/courses.test.ts，在 sqlite-memory fixture 下验证多种筛选组合与分页行为。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1779,13 +1779,13 @@
         },
         "T-20251113-act-008-local-query-api-ST-03": {
           "seed_id": null,
-          "title": "约定错误语义与性能目标",
+          "title": "对接缓存与响应优化",
           "type": "coding",
-          "summary": "从调用方体验出发定义错误码/错误消息、可观测性字段，以及不同数据量级下的性能预算与退化策略。",
+          "summary": "为热门筛选构建缓存/索引，加上 gzip/ETag 与字段投影，提升响应速度并提供监控指标。",
           "acceptance_draft": [
-            "整理一张错误语义表：区分用户输入错误、系统错误、数据不可用，映射到 HTTP 状态码与 error_code。",
-            "给出性能目标（P95 响应时间、最大返回记录数）与必要的指标/日志字段，约定告警阈值。",
-            "记录降级策略（例如结果截断、分页提示、后台缓存）并写入 docs/api/error_budget.md 供 SLO 跟踪。"
+            "实现查询结果缓存（内存或 SQLite 视图），并提供失效策略与命中率日志。",
+            "响应头包含 ETag/Cache-Control/Gzip，client 复用时可走 304。",
+            "在 tests/api/perf.test.ts 或 k6 脚本中验证 95% 请求在目标延迟内完成，并输出报告。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1875,13 +1875,13 @@
       "subtasks": {
         "T-20251113-act-009-subscription-management-ST-01": {
           "seed_id": null,
-          "title": "定义订阅对象与用户身份抽象",
+          "title": "实现订阅 CRUD 接口与数据模型",
           "type": "coding",
-          "summary": "明确订阅是课程级还是 section 级、如何表示 Index/Section 标识，以及邮箱/Discord 等用户身份的统一存储方式。",
+          "summary": "创建 subscriptions 与 subscription_channels 等表，并提供 /api/subscribe、/api/unsubscribe、/api/subscriptions 端点。",
           "acceptance_draft": [
-            "在 docs/subscription/model.md 中描述课程、section、meeting 等对象与订阅记录的关联方式，明确主键/外键。",
-            "定义用户身份字段（email、discord_handle 等）与验证规则、唯一性约束及脱敏策略。",
-            "给出示例 payload（订阅创建、批量导入），说明如何在 API 和数据库之间传递订阅对象。"
+            "编写 SQL migration 定义订阅表、渠道表及唯一约束，包含邮箱与 Discord 两类渠道字段。",
+            "API 层提供创建、取消、查询接口，带输入校验与速率限制。",
+            "tests/api/subscriptions.test.ts 覆盖 happy path、重复订阅、非法输入等场景。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1920,13 +1920,13 @@
         },
         "T-20251113-act-009-subscription-management-ST-02": {
           "seed_id": null,
-          "title": "梳理订阅生命周期与状态机",
+          "title": "在前端集成订阅 UI 与状态管理",
           "type": "coding",
-          "summary": "绘制从创建、验证、生效、推送、退订/失效/过期的状态转换，明确每个状态入口条件、事件与持久化字段。",
+          "summary": "实现 SubscribeButton、SubscriptionDrawer 等组件，连通 API 并在本地保存订阅状态。",
           "acceptance_draft": [
-            "绘制状态图或表格列出 Active、Pending, Paused, Unsubscribed, Expired 等状态及含义。",
-            "描述触发状态变化的事件（创建、验证、通知成功/失败、退订、过期）和需要记录的元数据（时间戳、原因）。",
-            "将状态机写入 docs/subscription/state_machine.md，并给出数据库字段/索引用于支撑状态查询。"
+            "页面中可针对课程/section 切换订阅，成功后展示提示并更新 UI 徽标。",
+            "订阅表单支持邮箱/Discord 两种输入并内建校验，错误时给出 inline 提示。",
+            "通过 RTL/Playwright 测试验证 UI 会调用真实 API mock，并能正确处理订阅/退订。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -1964,13 +1964,13 @@
         },
         "T-20251113-act-009-subscription-management-ST-03": {
           "seed_id": null,
-          "title": "设计创建/管理/退订入口与安全边界",
+          "title": "串联订阅数据与通知后台",
           "type": "coding",
-          "summary": "定义用户通过页面、邮件链接等入口创建/查看/取消订阅的流程，以及身份校验、签名、防滥用策略。",
+          "summary": "将订阅 CRUD 与通知/poller 模块打通，生成 email_jobs/discord 队列记录并支持退订生效。",
           "acceptance_draft": [
-            "列出所有入口（课程页面按钮、邮件退订链接、未来的 Discord 命令）及所需参数。",
-            "为每个入口制定安全要求：例如签名 token、有效期、速率限制或验证码策略。",
-            "在 docs/subscription/access_points.md 中记录流程图与安全边界，供前端/API/通知统一实现。"
+            "新增触发器或服务逻辑，在订阅创建/取消时更新通知队列映射表。",
+            "提供 `pnpm test subscription-pipeline`，模拟订阅→poller 事件→队列入库→退订的闭环。",
+            "预置 sample 订阅导入脚本，便于本地快速演示通知效果。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -2068,13 +2068,13 @@
       "subtasks": {
         "T-20251113-act-010-local-polling-notify-ST-01": {
           "seed_id": null,
-          "title": "定义空位事件语义与粒度",
+          "title": "实现 openSections 轮询调度器",
           "type": "coding",
-          "summary": "结合订阅模型与 DB 结构，明确哪些状态变化视为空位事件、事件粒度（section 或课程+section）、幂等键组成。",
+          "summary": "创建 poller/src/openSectionsPoller.ts，按配置频率调用 SOC openSections API，缓存最近一次响应并写入日志。",
           "acceptance_draft": [
-            "列出可能触发事件的状态变化（closed→open、capacity 提升、waitlist 开放），并说明数据来源字段。",
-            "定义事件 payload：必需字段（term、campus、courseNumber、index、section、capacity、timestamp 等）及幂等 key。",
-            "在 docs/notify/event_contract.md 中记录事件语义，并与订阅系统的字段对齐。"
+            "poller 支持 `--interval`、`--terms`、`--campuses` 等参数，并可选择串行或并行执行。",
+            "每次请求会记录响应哈希与时间，写入 `logs/poller.log`，异常时自动退避重试。",
+            "tests/poller/poller.spec.ts 使用 mock API 验证调度节奏与退避策略。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -2121,13 +2121,13 @@
         },
         "T-20251113-act-010-local-polling-notify-ST-02": {
           "seed_id": null,
-          "title": "设计轮询策略（范围 × 频率 × 安全边界）",
+          "title": "构建变化检测与事件派发器",
           "type": "coding",
-          "summary": "在 API 限流、订阅规模与通知延迟之间平衡，确定轮询的 term/campus 范围、批次、频率以及节流策略。",
+          "summary": "比较最新 openSections 数据与上次快照，识别 seat delta 并向通知队列写入结构化事件。",
           "acceptance_draft": [
-            "计算不同 term/campus 组合的课程/section 数量与预估 payload，给出分批策略（按 campus/subject）。",
-            "根据限流实验给出推荐轮询间隔、并发数、失败退避逻辑，形成时间表。",
-            "在 docs/notify/polling_strategy.md 中记录策略及“缩范围/降频”方案。"
+            "实现 diff 模块，将课程/section 的容量变化与状态从 raw 数据中计算出来。",
+            "派发器将事件写入 SQLite/Redis 队列，包含订阅匹配所需的课程 ID、seat delta、时间戳。",
+            "integration 测试模拟两次不同快照，断言仅 seat 变化的课程会触发事件。"
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -2175,13 +2175,13 @@
         },
         "T-20251113-act-010-local-polling-notify-ST-03": {
           "seed_id": null,
-          "title": "规划异常降级与恢复行为",
+          "title": "提供监控指标与回放工具",
           "type": "coding",
-          "summary": "定义当 API 错误、限流、数据缺失时如何降频/停服、如何通知、如何恢复后补发事件，保证事件正确性。",
+          "summary": "为 poller 暴露 metrics/health 接口，并提供 CLI 能够回放历史事件，便于排查通知链路。",
           "acceptance_draft": [
-            "列出至少 5 种异常（速率限制、API 超时、数据字段缺失、数据库锁、订阅表不可用），为每种异常定义检测与降级动作。",
-            "定义恢复策略：如何记录最后成功的游标/时间戳，恢复后如何避免重复或遗漏事件。",
-            "在 docs/notify/poller_failover.md 中记录降级/恢复流程、开关与监控指标。"
+            "实现 HTTP `/metrics` 或 `pnpm ts-node poller/src/pollerMonitor.ts --once`，输出最近轮询时间、成功率等指标。",
+            "新增 `pnpm run poller:replay --file snapshots/openSections.json`，可复现历史事件并写入队列。",
+            "在 docs 或 README 中记录监控与回放命令，并在 CI smoke 测试中运行 `pnpm run poller:smoke`. "
           ],
           "lane": "now",
           "priority_suggested": "P0",
@@ -2278,13 +2278,13 @@
       "subtasks": {
         "T-20251113-act-011-mail-sender-module-ST-01": {
           "seed_id": null,
-          "title": "抽象统一邮件消息模型与发送接口",
+          "title": "抽象邮件发送接口与配置系统",
           "type": "coding",
-          "summary": "定义平台无关的邮件 message 对象（收件人、主题、模板 key、语言、变量、追踪信息）以及统一的 send 接口和返回语义。",
+          "summary": "定义 MailProvider 接口与配置加载模块，统一 sender、速率限制与模板变量注入方式。",
           "acceptance_draft": [
-            "编写 MailMessage 接口/类型定义，包含 to、cc/bcc、subject、template_id、locale、variables、metadata。",
-            "定义 MailSender 接口的返回值（成功、暂时失败、永久失败）与错误码枚举。",
-            "在 docs/notify/mail_sender_interface.md 中记录模型，并提供伪代码示例。"
+            "在 `notifier/src/mail/providers/MailProvider.ts` 中定义 send、ping、close 等接口。",
+            "提供 `configs/mail.json` 或环境变量映射，允许在运行时切换 provider 与速率上限。",
+            "编写单元测试验证配置解析与 provider 工厂能根据输入返回正确实现。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -2321,13 +2321,13 @@
         },
         "T-20251113-act-011-mail-sender-module-ST-02": {
           "seed_id": null,
-          "title": "梳理邮件通道与优先级",
+          "title": "实现 SendGrid 与 SMTP 适配器",
           "type": "coding",
-          "summary": "列出当前必须支持的邮件通道（如 SendGrid、SMTP）与未来可扩展通道，定义默认优先级与切换条件。",
+          "summary": "基于 MailProvider 接口完成 SendGrid API 与 SMTP 两种实现，支持模板变量、附件与错误分级。",
           "acceptance_draft": [
-            "制作通道能力表（SendGrid、SMTP、未来第三方），列出认证方式、速率限制、模板能力。",
-            "明确默认主通道与备用通道、切换触发条件与配置项。",
-            "将策略记录在 docs/notify/mail_channels.md，供部署文档引用。"
+            "SendGrid 版本支持自定义 headers、API key 读取与模板变量绑定，并在响应失败时抛出可辨识错误。",
+            "SMTP 版本通过 nodemailer（或等效库）实现，支持 TLS 与本地 mailhog。",
+            "tests/mail/providers.test.ts 使用 nock/mailhog mock 验证两种实现都能发送样例通知。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
@@ -2365,13 +2365,13 @@
         },
         "T-20251113-act-011-mail-sender-module-ST-03": {
           "seed_id": null,
-          "title": "设计错误分类与降级/切换策略",
+          "title": "实现速率限制、重试与指标上报",
           "type": "coding",
-          "summary": "区分临时性与永久性错误，定义重试、退避、切换备用通道与告警流程。",
+          "summary": "在邮件发送链路中加入速率限制器、指数退避重试与 Prometheus 指标，保障通知稳定。",
           "acceptance_draft": [
-            "列出常见错误（网络、认证、配额、内容拒收）及分类（临时/永久）。",
-            "为每类错误指定重试次数、退避策略、是否触发通道切换以及告警等级。",
-            "在 docs/notify/mail_error_handling.md 中记录策略，并提供与代码对应的错误码表。"
+            "引入 token bucket 或队列机制，确保单位时间的发送次数不超过配置阈值，并在日志中打印当前速率。",
+            "失败任务按指数退避重试，超过阈值写入 dead-letter 表供人工处理。",
+            "提供 `/metrics` 或 `pnpm ts-node notifier/src/mailMetrics.ts` 输出发送量、失败率、重试次数，并在 tests/mail/metrics.test.ts 中验证计数。"
           ],
           "lane": "next",
           "priority_suggested": "P1",
