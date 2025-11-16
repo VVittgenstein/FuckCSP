@@ -19,3 +19,6 @@
 
 ## Testing
 - **未执行**：编码代理因缺少 Node.js/pnpm 无法运行 `pnpm install/test` 或真实 CLI；需要在具备依赖的环境补跑。
+
+## Code Review - T-20251113-soc-api-validation-ST-01 - 2025-11-16T02:40:42Z
+Codex Review: Didn't find any major issues. Keep it up!
